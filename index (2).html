@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首都圏スーパー銭湯マップ</title>
+    
+    <!-- Leaflet.js (地図ライブラリ) のスタイルシート -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Font Awesome (アイコン) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Google Fonts (Noto Sans JP) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- 基本スタイル --- */
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- デスクトップ用レイアウト --- */
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 340px;
+            min-width: 320px;
+            background: #ffffff;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #f0f0f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+        }
+
+        .sidebar-header p {
+            font-size: 13px;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .filters-container {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            background-color: #f8f9fa;
+        }
+
+        .filter-group {
+            margin-bottom: 12px;
+        }
+        .filter-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-group h4 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .filter-buttons button {
+            padding: 5px 12px;
+            border: 1px solid #ccc;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background-color: #fff;
+        }
+
+        .filter-buttons button.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        .stats-section {
+            padding: 12px;
+            background-color: #e3f2fd;
+            color: #0d47a1;
+        }
+        .stats-section p {
+            margin: 4px 0;
+            font-size: 14px;
+        }
+        .stats-section strong {
+            font-weight: 700;
+        }
+
+        .facility-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .facility-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .facility-item:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .facility-item.selected {
+            border-color: #3498db;
+            background: #f0f8ff;
+        }
+        .facility-item h5 {
+            font-size: 15px;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+            color: #2c3e50;
+        }
+        .facility-item p {
+            font-size: 12px;
+            color: #666;
+            margin: 2px 0;
+        }
+        .facility-rating {
+            color: #f39c12;
+            font-weight: 700;
+        }
+
+        .map-container {
+            flex: 1;
+            /* height: 100% が重要 */
+            height: 100%;
+        }
+        #map, #mobile-map {
+            height: 100%;
+            width: 100%;
+            background-color: #eaf0f5;
+        }
+        
+        /* --- モバイル用レイアウト --- */
+        .mobile-header {
+            display: none; /* デフォルトでは非表示 */
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .mobile-header h1 {
+            font-size: 18px;
+            margin: 0;
+        }
+        #search-toggle {
+            margin-top: 8px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.5);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+        .mobile-search-panel {
+            display: none;
+            padding: 12px;
+            background: #fff;
+            max-height: 45vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                display: none;
+            }
+            .mobile-header {
+                display: block;
+            }
+        }
+        
+        /* --- Leaflet ポップアップのスタイル --- */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .leaflet-popup-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .leaflet-popup-content h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+        }
+        .leaflet-popup-content p {
+            margin: 5px 0;
+        }
+
+        /* --- カスタムスクロールバー --- */
+        .facility-list-container::-webkit-scrollbar, .mobile-search-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .facility-list-container::-webkit-scrollbar-track, .mobile-search-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .facility-list-container::-webkit-scrollbar-thumb, .mobile-search-panel::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <!-- デスクトップ用コンテナ -->
+    <div class="app-container" id="desktop-container">
+        <!-- サイドバー -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>首都圏スーパー銭湯マップ</h1>
+                <p>人気のスーパー銭湯・スパ施設を探索</p>
+            </div>
+
+            <!-- フィルター -->
+            <div class="filters-container">
+                <div class="filter-group">
+                    <input type="text" id="search-input" placeholder="キーワード (施設名, 住所, 特徴など)" class="search-input">
+                </div>
+                <div class="filter-group">
+                    <h4><i class="fas fa-star"></i> 評価</h4>
+                    <div class="filter-buttons" id="rating-filters">
+                        <button data-value="all" class="active">すべて</button>
+                        <button data-value="4.5">4.5以上</button>
+                        <button data-value="4.2">4.2以上</button>
+                        <button data-value="4.0">4.0以上</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <h4><i class="fas fa-yen-sign"></i> 料金 (平日)</h4>
+                    <div class="filter-buttons" id="price-filters">
+                        <button data-value="all" class="active">すべて</button>
+                        <button data-value="1000">〜1000円</button>
+                        <button data-value="2000">〜2000円</button>
+                        <button data-value="3001">2001円〜</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 統計情報 -->
+            <div class="stats-section" id="stats-section"></div>
+
+            <!-- 施設リスト -->
+            <div class="facility-list-container" id="facility-list"></div>
+        </aside>
+
+        <!-- 地図コンテナ -->
+        <main class="map-container">
+            <div id="map"></div>
+        </main>
+    </div>
+
+    <!-- モバイル用コンテナ -->
+    <div class="app-container" id="mobile-container" style="display: none;">
+        <header class="mobile-header">
+            <h1>首都圏スーパー銭湯マップ</h1>
+            <button id="search-toggle"><i class="fas fa-search"></i> 検索・絞り込み</button>
+        </header>
+        <div class="mobile-search-panel" id="mobile-search-panel">
+            <!-- モバイル用フィルターがここに複製される -->
+        </div>
+        <main class="map-container">
+            <div id="mobile-map"></div>
+        </main>
+    </div>
+
+
+    <!-- Leaflet.js のスクリプト -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- アプリケーションのロジック -->
+    <script type="module">
+        const onsenData = [
+          {
+            "No": 1, "施設名": "前野原温泉さやの湯処", "住所": "東京都板橋区前野町3-41-1", "特徴": "源泉かけ流し, うぐいす色の湯, 日本庭園", "総合評価": 4.2, "緯度": 35.77077, "経度": 139.6926, "平日料金": 900, "土日祝料金": 1150, "料金特記事項": "タオル別途、岩盤浴別途530円"
+          },
+          {
+            "No": 2, "施設名": "豊島園 庭の湯", "住所": "東京都練馬区向山3-25-1", "特徴": "天然温泉, バーデゾーン, 日本庭園", "総合評価": 4.2, "緯度": 35.74408, "経度": 139.64797, "平日料金": 2360, "土日祝料金": 2660, "料金特記事項": "タオル・館内着込み、中学生未満入館不可"
+          },
+          {
+            "No": 3, "施設名": "秋川渓谷 瀬音の湯", "住所": "東京都あきる野市乙津565", "特徴": "天然温泉, 美肌の湯, 自然景観", "総合評価": 4.1, "緯度": 35.7225, "経度": 139.1458, "平日料金": 1000, "土日祝料金": 1000, "料金特記事項": "タオル別途、3時間まで"
+          },
+          {
+            "No": 4, "施設名": "新宿天然温泉テルマー湯", "住所": "東京都新宿区歌舞伎町1-1-2", "特徴": "中伊豆直送天然温泉, 高濃度炭酸泉, 24時間営業", "総合評価": 4.1, "緯度": 35.69455, "経度": 139.70523, "平日料金": 2700, "土日祝料金": 3200, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 5, "施設名": "タイムズスパ・レスタ", "住所": "東京都豊島区東池袋4-25-9", "特徴": "大人向け空間, フィンランドサウナ, 高級アメニティ", "総合評価": 4.1, "緯度": 35.72883, "経度": 139.71748, "平日料金": 3100, "土日祝料金": 3100, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 6, "施設名": "東京ドーム天然温泉 Spa Laqua", "住所": "東京都文京区後楽1-3-61", "特徴": "天然温泉, 多彩なサウナ, ヒーリングバーデ", "総合評価": 4.0, "緯度": 35.7056, "経度": 139.7523, "平日料金": 3200, "土日祝料金": 3800, "料金特記事項": "タオル・館内着込み、休日割増あり"
+          },
+          {
+            "No": 7, "施設名": "竜泉寺の湯 八王子みなみ野店", "住所": "東京都八王子市片倉町3505", "特徴": "高濃度炭酸泉, 岩盤浴, 天然温泉", "総合評価": 4.0, "緯度": 35.64078, "経度": 139.33262, "平日料金": 750, "土日祝料金": 900, "料金特記事項": "タオル別途、岩盤浴別途750円"
+          },
+          {
+            "No": 8, "施設名": "稲城天然温泉 季乃彩", "住所": "東京都稲城市向陽台6-13", "特徴": "源泉かけ流し, 岩盤浴, 四季の景観", "総合評価": 4.0, "緯度": 35.6425, "経度": 139.4925, "平日料金": 870, "土日祝料金": 1070, "料金特記事項": "タオル別途、岩盤浴別途720円"
+          },
+          {
+            "No": 9, "施設名": "京王高尾山温泉極楽湯", "住所": "東京都八王子市高尾町2229-7", "特徴": "天然温泉, 登山後利用, 駅直結", "総合評価": 4.0, "緯度": 35.63208, "経度": 139.26925, "平日料金": 1100, "土日祝料金": 1300, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 10, "施設名": "国立温泉 湯楽の里", "住所": "東京都国立市泉3-29-11", "特徴": "源泉かけ流し, 富士山眺望, 高濃度炭酸泉", "総合評価": 4.0, "緯度": 35.67598, "経度": 139.42709, "平日料金": 870, "土日祝料金": 1070, "料金特記事項": "タオル別途、岩盤浴別途670円"
+          },
+          {
+            "No": 11, "施設名": "両国湯屋江戸遊", "住所": "東京都墨田区亀沢1-5-8", "特徴": "ワーキングスペース, 6種の風呂, 3種のサウナ", "総合評価": 4.3, "緯度": 35.69685, "経度": 139.79846, "平日料金": 2950, "土日祝料金": 3450, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 12, "施設名": "RAKU SPA 1010 神田", "住所": "東京都千代田区神田淡路町2-9-9", "特徴": "コワーキングスペース, 炭酸泉, 駅近", "総合評価": 4.0, "緯度": 35.6981, "経度": 139.7679, "平日料金": 1790, "土日祝料金": 1990, "料金特記事項": "コース料金制、タオル・館内着込み"
+          },
+          {
+            "No": 13, "施設名": "東京豊洲万葉倶楽部", "住所": "東京都江東区豊洲6-5-1", "特徴": "湯河原温泉, 展望足湯庭園, 24時間営業", "総合評価": 4.2, "緯度": 35.64591, "経度": 139.78308, "平日料金": 3170, "土日祝料金": 3500, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 14, "施設名": "東京荻窪 武蔵野天然温泉なごみの湯", "住所": "東京都杉並区上荻1-10-10", "特徴": "天然温泉, 多彩な岩盤浴, ロウリュ", "総合評価": 4.2, "緯度": 35.70475, "経度": 139.61833, "平日料金": 2200, "土日祝料金": 2500, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 15, "施設名": "花景の湯", "住所": "東京都稲城市矢野口4015-1", "特徴": "絶景露天風呂, 天然温泉, オートロウリュサウナ", "総合評価": 4.5, "緯度": 35.62828, "経度": 139.51912, "平日料金": 1700, "土日祝料金": 2000, "料金特記事項": "タオル・館内着込み、岩盤浴別途900円"
+          },
+          {
+            "No": 16, "施設名": "泉天空の湯 有明ガーデン", "住所": "東京都江東区有明2-1-7", "特徴": "天然温泉, 岩盤浴, 女性専用休憩室", "総合評価": 4.1, "緯度": 35.6338, "経度": 139.7944, "平日料金": 2200, "土日祝料金": 2800, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 17, "施設名": "天然温泉平和島", "住所": "東京都大田区平和島1-1-1", "特徴": "天然温泉, 高濃度炭酸泉, 空港送迎", "総合評価": 4.0, "緯度": 35.58473, "経度": 139.74078, "平日料金": 2300, "土日祝料金": 2600, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 18, "施設名": "東京・湯河原温泉 万葉の湯", "住所": "東京都町田市鶴間7-3-1", "特徴": "湯河原直送温泉, 24時間営業, 岩盤浴", "総合評価": 4.1, "緯度": 35.50755, "経度": 139.47722, "平日料金": 2950, "土日祝料金": 3280, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 19, "施設名": "大谷田温泉明神の湯", "住所": "東京都足立区大谷田1-18-1", "特徴": "源泉かけ流し, 濃塩源泉, 露天風呂", "総合評価": 4.2, "緯度": 35.77801, "経度": 139.84763, "平日料金": 800, "土日祝料金": 950, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 20, "施設名": "スパジアムジャポン", "住所": "東京都東久留米市上の原2-7-7", "特徴": "関東最大級, 天然温泉, 3万冊のコミック", "総合評価": 4.3, "緯度": 35.77287, "経度": 139.54468, "平日料金": 850, "土日祝料金": 950, "料金特記事項": "タオル別途、岩盤浴別途850円"
+          },
+          {
+            "No": 21, "施設名": "東京染井温泉 SAKURA", "住所": "東京都豊島区駒込5-4-24", "特徴": "天然温泉, スタジアムサウナ, 和モダン空間", "総合評価": 4.1, "緯度": 35.73794, "経度": 139.73913, "平日料金": 1430, "土日祝料金": 1760, "料金特記事項": "タオル・館内着込み、中学生未満入館不可"
+          },
+          {
+            "No": 22, "施設名": "Smart Stay SHIZUKU 品川大井町", "住所": "東京都品川区大井1-50-5", "特徴": "女性専用エリア, 駅近, カプセルホテル", "総合評価": 4.0, "緯度": 35.6083, "経度": 139.731, "平日料金": 1400, "土日祝料金": 1400, "料金特記事項": "カプセルホテル併設、時間制"
+          },
+          {
+            "No": 23, "施設名": "浅草ROX まつり湯", "住所": "東京都台東区浅草1-25-15", "特徴": "展望露天風呂, 11種の風呂, 24時間営業", "総合評価": 3.9, "緯度": 35.71292, "経度": 139.79268, "平日料金": 2750, "土日祝料金": 3050, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 24, "施設名": "ルビーパレス", "住所": "東京都新宿区大久保1-12-2", "特徴": "女性専用, 24時間営業, 韓国式アカスリ", "総合評価": 4.0, "緯度": 35.69838, "経度": 139.70356, "平日料金": 2200, "土日祝料金": 2200, "料金特記事項": "女性専用、タオル・館内着込み"
+          },
+          {
+            "No": 25, "施設名": "オアシスサウナアスティル", "住所": "東京都新宿区新宿4-3-18", "特徴": "男性専用, 駅近, 高温サウナ", "総合評価": 4.2, "緯度": 35.6896, "経度": 139.7042, "平日料金": 2500, "土日祝料金": 2500, "料金特記事項": "男性専用、時間制"
+          },
+          {
+            "No": 26, "施設名": "Smart Stay SHIZUKU上野駅前", "住所": "東京都台東区上野6-9-9", "特徴": "女性専用フロア, 駅近, カプセルホテル", "総合評価": 4.0, "緯度": 35.71014, "経度": 139.77317, "平日料金": 1400, "土日祝料金": 1400, "料金特記事項": "カプセルホテル併設、時間制"
+          },
+          {
+            "No": 27, "施設名": "ロスコ", "住所": "東京都北区中里2-4-8", "特徴": "カプセルホテル, サウナ, 24時間営業", "総合評価": 3.9, "緯度": 35.7345, "経度": 139.761, "平日料金": 2400, "土日祝料金": 2400, "料金特記事項": "カプセルホテル併設"
+          },
+          {
+            "No": 28, "施設名": "永山健康ランド竹取の湯", "住所": "東京都多摩市永山1-3-4", "特徴": "岩盤浴無料, 24時間営業, 駅近", "総合評価": 4.0, "緯度": 35.63153, "経度": 139.44794, "平日料金": 2300, "土日祝料金": 2500, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 29, "施設名": "スパ&ホテル 和", "住所": "東京都豊島区西池袋1-10-3", "特徴": "源泉かけ流し黒湯, カプセルホテル, 駅近", "総合評価": 4.1, "緯度": 35.7290, "経度": 139.7098, "平日料金": 2380, "土日祝料金": 2880, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 30, "施設名": "横浜天然温泉 SPA EAS", "住所": "神奈川県横浜市西区北幸2-2-1", "特徴": "大人専用, 天然温泉, ロウリュイベント", "総合評価": 4.1, "緯度": 35.46565, "経度": 139.61739, "平日料金": 2770, "土日祝料金": 3320, "料金特記事項": "タオル・館内着込み、中学生未満入館不可"
+          },
+          {
+            "No": 31, "施設名": "横濱スパヒルズ竜泉寺の湯", "住所": "神奈川県横浜市旭区白根8-8", "特徴": "3種の炭酸泉, 岩盤浴, 天然温泉", "総合評価": 4.0, "緯度": 35.49039, "経度": 139.55036, "平日料金": 750, "土日祝料金": 900, "料金特記事項": "タオル別途、岩盤浴別途750円"
+          },
+          {
+            "No": 32, "施設名": "湘南RESORT SPA 竜泉寺の湯", "住所": "神奈川県茅ヶ崎市中島1339-1", "特徴": "富士見の岩湯, 高濃度炭酸泉, 天然温泉", "総合評価": 4.1, "緯度": 35.33085, "経度": 139.38143, "平日料金": 750, "土日祝料金": 900, "料金特記事項": "タオル別途、岩盤浴別途750円"
+          },
+          {
+            "No": 33, "施設名": "横浜みなとみらい万葉倶楽部", "住所": "神奈川県横浜市中区新港2-7-1", "特徴": "湯河原温泉, 展望足湯庭園, 24時間営業", "総合評価": 4.0, "緯度": 35.4578, "経度": 139.6387, "平日料金": 2950, "土日祝料金": 3280, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 34, "施設名": "天然温泉 満天の湯", "住所": "神奈川県横浜市保土ケ谷区上星川3-1-1", "特徴": "源泉かけ流し, 薬湯, 多彩な浴槽", "総合評価": 4.0, "緯度": 35.46733, "経度": 139.57988, "平日料金": 830, "土日祝料金": 930, "料金特記事項": "タオル別途、岩盤浴別途700円"
+          },
+          {
+            "No": 35, "施設名": "天山湯治郷", "住所": "神奈川県足柄下郡箱根町湯本茶屋208", "特徴": "5種の野天風呂, 2種の泉質, 自然調和", "総合評価": 4.4, "緯度": 35.2255, "経度": 139.0911, "平日料金": 1400, "土日祝料金": 1400, "料金特記事項": "タオル別途、小学生未満入館不可"
+          },
+          {
+            "No": 36, "施設名": "箱根湯寮", "住所": "神奈川県足柄下郡箱根町塔之澤4", "特徴": "貸切個室露天風呂, 古民家風, ロウリュ", "総合評価": 4.3, "緯度": 35.23395, "経度": 139.09585, "平日料金": 1600, "土日祝料金": 1900, "料金特記事項": "タオル別途、貸切個室露天風呂あり"
+          },
+          {
+            "No": 37, "施設名": "宮前平源泉湯けむりの庄", "住所": "神奈川県川崎市宮前区宮前平2-13-3", "特徴": "炭酸琥珀湯, 6種の岩盤浴, 天然温泉", "総合評価": 4.2, "緯度": 35.58677, "経度": 139.58109, "平日料金": 1320, "土日祝料金": 1580, "料金特記事項": "タオル別途、岩盤浴別途820円"
+          },
+          {
+            "No": 38, "施設名": "綱島源泉湯けむりの庄", "住所": "神奈川県横浜市港北区樽町3-7-61", "特徴": "炭酸琥珀湯, 6種の岩盤浴, 天然温泉", "総合評価": 4.2, "緯度": 35.53055, "経度": 139.64508, "平日料金": 1400, "土日祝料金": 1650, "料金特記事項": "タオル別途、岩盤浴別途850円"
+          },
+          {
+            "No": 39, "施設名": "RAKU SPA 鶴見", "住所": "神奈川県横浜市鶴見区元宮2-1-39", "特徴": "15種の風呂, 2万冊のコミック, 岩盤浴", "総合評価": 4.1, "緯度": 35.52286, "経度": 139.67765, "平日料金": 1628, "土日祝料金": 1848, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 40, "施設名": "縄文天然温泉志楽の湯", "住所": "神奈川県川崎市幸区塚越4-314-1", "特徴": "化石海水温泉, 古民家風, 里山風景", "総合評価": 4.1, "緯度": 35.5405, "経度": 139.68316, "平日料金": 970, "土日祝料金": 1100, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 41, "施設名": "スカイスパ YOKOHAMA", "住所": "神奈川県横浜市西区高島2-19-12", "特徴": "高層階眺望, ロウリュ, コワーキング", "総合評価": 4.1, "緯度": 35.46455, "経度": 139.62463, "平日料金": 2550, "土日祝料金": 2550, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 42, "施設名": "モダン湯治 おんりーゆー", "住所": "神奈川県南足柄市広町1520-1", "特徴": "森林浴, ぬる湯, デトックス", "総合評価": 4.1, "緯度": 35.30907, "経度": 139.07828, "平日料金": 1800, "土日祝料金": 1800, "料金特記事項": "タオル・館内着込み、小学生未満入館不可"
+          },
+          {
+            "No": 43, "施設名": "箱根小涌園ユネッサン", "住所": "神奈川県足柄下郡箱根町二ノ平1297", "特徴": "温泉アミューズメント, 水着エリア, 家族向け", "総合評価": 3.9, "緯度": 35.242, "経度": 139.0494, "平日料金": 2500, "土日祝料金": 2500, "料金特記事項": "水着エリア、タオル別途"
+          },
+          {
+            "No": 44, "施設名": "小田原お堀端 万葉の湯", "住所": "神奈川県小田原市栄町1-5-14", "特徴": "湯河原温泉, 駅近, 展望足湯", "総合評価": 4.0, "緯度": 35.25418, "経度": 139.15748, "平日料金": 2730, "土日祝料金": 3060, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 45, "施設名": "湯乃蔵ガーデン", "住所": "神奈川県足柄上郡大井町金子343-1", "特徴": "天然温泉, 庭園露天風呂, 岩盤浴", "総合評価": 3.9, "緯度": 35.3129, "経度": 139.1867, "平日料金": 850, "土日祝料金": 950, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 46, "施設名": "横須賀温泉 湯楽の里", "住所": "神奈川県横須賀市馬堀海岸4-1-23", "特徴": "海一望の露天風呂, 天然温泉, 高濃度炭酸泉", "総合評価": 4.0, "緯度": 35.26311, "経度": 139.71527, "平日料金": 1050, "土日祝料金": 1250, "料金特記事項": "タオル別途、岩盤浴別途750円"
+          },
+          {
+            "No": 47, "施設名": "稲村ヶ崎温泉", "住所": "神奈川県鎌倉市稲村ガ崎1-16-13", "特徴": "黄金色の湯, 湘南の海, 江の島眺望", "総合評価": 4.0, "緯度": 35.30325, "経度": 139.52443, "平日料金": 1500, "土日祝料金": 1500, "料金特記事項": "タオル・館内着込み、小学生未満入館不可"
+          },
+          {
+            "No": 48, "施設名": "ゆめみ処おふろの王様 海老名店", "住所": "神奈川県海老名市柏ケ谷555-1", "特徴": "人工温泉, 多彩な浴槽, 岩盤浴", "総合評価": 3.8, "緯度": 35.46389, "経度": 139.409, "平日料金": 880, "土日祝料金": 980, "料金特記事項": "タオル別途、岩盤浴別途700円"
+          },
+          {
+            "No": 49, "施設名": "江の島アイランドスパ", "住所": "神奈川県藤沢市江の島2-1-6", "特徴": "天然温泉, 洞窟プール, 絶景", "総合評価": 3.8, "緯度": 35.3, "経度": 139.48055, "平日料金": 2750, "土日祝料金": 3190, "料金特記事項": "タオル・館内着込み、小学生未満入館不可"
+          },
+          {
+            "No": 50, "施設名": "溝口温泉 喜楽里", "住所": "神奈川県川崎市高津区溝口5-2-15", "特徴": "天然温泉, 岩盤浴, 高濃度炭酸泉", "総合評価": 3.9, "緯度": 35.58038, "経度": 139.62246, "平日料金": 920, "土日祝料金": 1120, "料金特記事項": "タオル別途、中学生未満入館不可"
+          },
+          {
+            "No": 51, "施設名": "黒湯天然温泉みうら湯", "住所": "神奈川県横浜市南区井土ヶ谷下町237-4", "特徴": "黒湯天然温泉, 炭酸泉, 駅近", "総合評価": 3.8, "緯度": 35.41994, "経度": 139.59783, "平日料金": 800, "土日祝料金": 950, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 52, "施設名": "ファンタジーサウナ&スパおふろの国", "住所": "神奈川県横浜市鶴見区下末吉2-25-23", "特徴": "熱波イベント, 薬湯, サウナーの聖地", "総合評価": 4.0, "緯度": 35.52319, "経度": 139.67576, "平日料金": 770, "土日祝料金": 880, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 53, "施設名": "朝日湯源泉ゆいる", "住所": "神奈川県川崎市川崎区鋼管通3-1-2", "特徴": "高温多湿サウナ, 強炭酸泉, 源泉かけ流し", "総合評価": 4.4, "緯度": 35.51507, "経度": 139.71449, "平日料金": 1680, "土日祝料金": 1980, "料金特記事項": "タオルセット・館内着込み"
+          },
+          {
+            "No": 54, "施設名": "スパ&ホテル舞浜ユーラシア", "住所": "千葉県浦安市千鳥13-20", "特徴": "源泉かけ流し, 7種の風呂, 3種のサウナ", "総合評価": 4.2, "緯度": 35.62704, "経度": 139.89528, "平日料金": 2200, "土日祝料金": 2700, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 55, "施設名": "JFA夢フィールド幕張温泉 湯楽の里", "住所": "千葉県千葉市美浜区美浜26", "特徴": "海一望の露天風呂, 高濃度炭酸泉, 岩盤浴", "総合評価": 4.3, "緯度": 35.63602, "経度": 140.03952, "平日料金": 1100, "土日祝料金": 1300, "料金特記事項": "タオル別途、岩盤浴別途750円"
+          },
+          {
+            "No": 56, "施設名": "スパメッツァおおたか竜泉寺の湯", "住所": "千葉県流山市おおたかの森西1-15-1", "特徴": "ドラゴンサウナ, 5つの炭酸泉, コワーキング", "総合評価": 4.5, "緯度": 35.871, "経度": 139.9238, "平日料金": 950, "土日祝料金": 1100, "料金特記事項": "タオル別途、岩盤浴別途800円"
+          },
+          {
+            "No": 57, "施設名": "成田空港温泉空の湯", "住所": "千葉県山武郡芝山町香山新田27-1", "特徴": "飛行機が見える露天風呂, 24時間営業, 岩盤浴", "総合評価": 4.0, "緯度": 35.75228, "経度": 140.40257, "平日料金": 1200, "土日祝料金": 1400, "料金特記事項": "タオル別途、深夜割増あり"
+          },
+          {
+            "No": 58, "施設名": "手賀沼観光リゾート 天然温泉 満天の湯", "住所": "千葉県柏市箕輪68-1", "特徴": "源泉かけ流し, 高濃度炭酸泉, 庭園露天風呂", "総合評価": 4.0, "緯度": 35.85694, "経度": 140.02455, "平日料金": 850, "土日祝料金": 980, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 59, "施設名": "湯の郷ほのか 蘇我店", "住所": "千葉県千葉市中央区川崎町51-1", "特徴": "展望風呂, 5種の岩盤浴, 24時間営業", "総合評価": 4.1, "緯度": 35.59117, "経度": 140.11782, "平日料金": 1100, "土日祝料金": 1300, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 60, "施設名": "大江戸温泉物語浦安万華郷", "住所": "千葉県浦安市日の出7-3-12", "特徴": "水着混浴露天, 38種の風呂, 温泉テーマパーク", "総合評価": 3.9, "緯度": 35.6403, "経度": 139.93186, "平日料金": 1848, "土日祝料金": 2178, "料金特記事項": "タオル別途、深夜割増あり"
+          },
+          {
+            "No": 61, "施設名": "極楽湯 柏店", "住所": "千葉県柏市大山台1-18", "特徴": "天然温泉, 岩盤浴, 多彩な浴槽", "総合評価": 3.8, "緯度": 35.88121, "経度": 139.96671, "平日料金": 760, "土日祝料金": 860, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 62, "施設名": "天然温泉極楽湯千葉稲毛店", "住所": "千葉県千葉市稲毛区園生町446-1", "特徴": "水素風呂, 炭酸風呂, 多彩な浴槽", "総合評価": 3.8, "緯度": 35.65055, "経度": 140.11905, "平日料金": 840, "土日祝料金": 940, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 63, "施設名": "湯楽の里 松戸店", "住所": "千葉県松戸市和名ケ谷947-3", "特徴": "高濃度炭酸泉, ロウリュ, 塩サウナ", "総合評価": 3.7, "緯度": 35.78374, "経度": 139.92072, "平日料金": 840, "土日祝料金": 990, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 64, "施設名": "spa resort 蘭々の湯", "住所": "千葉県千葉市稲毛区園生町445-2", "特徴": "7種の岩盤浴, 天然温泉, 炭酸泉", "総合評価": 4.0, "緯度": 35.64763, "経度": 140.116, "平日料金": 800, "土日祝料金": 950, "料金特記事項": "タオル別途、岩盤浴別途700円"
+          },
+          {
+            "No": 65, "施設名": "酒々井温泉 湯楽の里", "住所": "千葉県印旛郡酒々井町飯積1-1-1", "特徴": "展望露天風呂, 天然温泉, アウトレット隣接", "総合評価": 4.0, "緯度": 35.71977, "経度": 140.29339, "平日料金": 1050, "土日祝料金": 1250, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 66, "施設名": "野天風呂 湯の郷", "住所": "千葉県野田市山崎貝塚町26-4", "特徴": "11種の風呂, 2種のサウナ, 天然温泉", "総合評価": 3.8, "緯度": 35.92353, "経度": 139.89498, "平日料金": 800, "土日祝料金": 950, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 67, "施設名": "龍宮城スパホテル三日月", "住所": "千葉県木更津市北浜1", "特徴": "黄金風呂, 温泉プール, 展望温泉", "総合評価": 4.0, "緯度": 35.4212, "経度": 139.89763, "平日料金": 1600, "土日祝料金": 2200, "料金特記事項": "タオル込み"
+          },
+          {
+            "No": 68, "施設名": "天然温泉 湯~ねる", "住所": "千葉県習志野市茜浜2-2-1", "特徴": "天然温泉, カプセルホテル, 駅近", "総合評価": 3.9, "緯度": 35.66561, "経度": 140.01263, "平日料金": 1300, "土日祝料金": 1500, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 69, "施設名": "おふろcafe かりんの湯", "住所": "千葉県香取市西田部1-1", "特徴": "高濃度源泉, カフェ空間, 暖炉", "総合評価": 4.1, "緯度": 35.79455, "経度": 140.51557, "平日料金": 1380, "土日祝料金": 1580, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 70, "施設名": "のだ温泉 ほのか", "住所": "千葉県野田市花井1-1-2", "特徴": "9種の岩盤浴, 天然温泉, 24時間営業", "総合評価": 4.2, "緯度": 35.93995, "経度": 139.88193, "平日料金": 1000, "土日祝料金": 1200, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 71, "施設名": "佐倉天然温泉 澄流", "住所": "千葉県佐倉市染井野4-7-3", "特徴": "源泉かけ流し, 炭酸泉, ロウリュ", "総合評価": 4.0, "緯度": 35.71825, "経度": 140.19335, "平日料金": 950, "土日祝料金": 1100, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 72, "施設名": "船橋温泉 湯楽の里", "住所": "千葉県船橋市山手3-4-1", "特徴": "天然温泉, 高濃度炭酸泉, 岩盤浴", "総合評価": 3.9, "緯度": 35.71743, "経度": 139.98002, "平日料金": 840, "土日祝料金": 990, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 73, "施設名": "楽天地天然温泉 法典の湯", "住所": "千葉県市川市柏井町1-1520", "特徴": "源泉かけ流し, 炭酸泉, 十割そば", "総合評価": 4.0, "緯度": 35.73532, "経度": 139.96451, "平日料金": 850, "土日祝料金": 950, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 74, "施設名": "南柏天然温泉 すみれ", "住所": "千葉県流山市向小金1-272-8", "特徴": "天然温泉, ミュージックロウリュ, 炭酸泉", "総合評価": 4.1, "緯度": 35.8556, "経度": 139.9546, "平日料金": 900, "土日祝料金": 1000, "料金特記事項": "タオル別途、岩盤浴別途800円"
+          },
+          {
+            "No": 75, "施設名": "美楽温泉 SPA-HERBS", "住所": "埼玉県さいたま市北区植竹町1-816-8", "特徴": "全国1位受賞, 5種の岩盤浴, 天然温泉", "総合評価": 4.3, "緯度": 35.9307, "経度": 139.624, "平日料金": 1100, "土日祝料金": 1320, "料金特記事項": "タオル別途、岩盤浴別途990円"
+          },
+          {
+            "No": 76, "施設名": "竜泉寺の湯 草加谷塚店", "住所": "埼玉県草加市谷塚上町476", "特徴": "6種の炭酸泉, 8種の岩盤浴, オートロウリュ", "総合評価": 4.2, "緯度": 35.81453, "経度": 139.7883, "平日料金": 750, "土日祝料金": 900, "料金特記事項": "タオル別途、岩盤浴別途650円"
+          },
+          {
+            "No": 77, "施設名": "熊谷天然温泉 花湯スパリゾート", "住所": "埼玉県熊谷市上之1005", "特徴": "源泉かけ流し, 8種の岩盤浴, リゾート空間", "総合評価": 4.3, "緯度": 36.1518, "経度": 139.369, "平日料金": 1100, "土日祝料金": 1200, "料金特記事項": "タオル・館内着込み、岩盤浴込み"
+          },
+          {
+            "No": 78, "施設名": "杉戸天然温泉 雅楽の湯", "住所": "埼玉県北葛飾郡杉戸町杉戸2517", "特徴": "源泉かけ流し, 高濃度炭酸泉, ビュッフェ", "総合評価": 4.3, "緯度": 36.035, "経度": 139.729, "平日料金": 1150, "土日祝料金": 1350, "料金特記事項": "タオル・館内着込み、中学生未満入館不可"
+          },
+          {
+            "No": 79, "施設名": "宮沢湖温泉 喜楽里別邸", "住所": "埼玉県飯能市宮沢27-49", "特徴": "湖畔の絶景, 天然温泉, 岩盤浴", "総合評価": 4.1, "緯度": 35.87299, "経度": 139.33225, "平日料金": 1100, "土日祝料金": 1300, "料金特記事項": "タオル別途、中学生未満入館不可"
+          },
+          {
+            "No": 80, "施設名": "さいたま清河寺温泉", "住所": "埼玉県さいたま市西区清河寺683-4", "特徴": "源泉かけ流し, 竹林の露天風呂, 檜炭酸泉", "総合評価": 4.2, "緯度": 35.93373, "経度": 139.582, "平日料金": 800, "土日祝料金": 900, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 81, "施設名": "百観音温泉", "住所": "埼玉県久喜市西大輪2-2-1", "特徴": "強塩泉, 源泉かけ流し, 駅近", "総合評価": 4.2, "緯度": 36.09152, "経度": 139.67694, "平日料金": 800, "土日祝料金": 900, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 82, "施設名": "おふろcafé 白寿の湯", "住所": "埼玉県児玉郡神川町渡瀬337-1", "特徴": "高濃度源泉, 発酵食, カフェ空間", "総合評価": 4.1, "緯度": 36.17732, "経度": 139.06062, "平日料金": 980, "土日祝料金": 1130, "料金特記事項": "タオル・館内着込み、深夜割増あり"
+          },
+          {
+            "No": 83, "施設名": "天然自家源泉 星音の湯", "住所": "埼玉県秩父市下吉田468", "特徴": "天然温泉, 貸切露天風呂, 岩盤浴", "総合評価": 4.1, "緯度": 36.039, "経度": 139.04192, "平日料金": 930, "土日祝料金": 1030, "料金特記事項": "タオル別途"
+          },
+          {
+            "No": 84, "施設名": "天然温泉 花咲の湯", "住所": "埼玉県上尾市原市570", "特徴": "源泉かけ流し, ロウリュ, 岩盤浴", "総合評価": 4.1, "緯度": 35.9607, "経度": 139.62421, "平日料金": 850, "土日祝料金": 950, "料金特記事項": "タオル別途、岩盤浴別途650円"
+          },
+          {
+            "No": 85, "施設名": "昭和レトロな温泉銭湯 玉川温泉", "住所": "埼玉県比企郡ときがわ町玉川3700", "特徴": "昭和レトロ, アルカリ性単純温泉, 泥パック", "総合評価": 4.0, "緯度": 36.01916, "経度": 139.28402, "平日料金": 880, "土日祝料金": 980, "料金特記事項": "タオル別途"
+          }
+        ];
+
+        // --- グローバル変数 ---
+        let map, mobileMap;
+        let markers, mobileMarkers;
+        let currentFilters = {
+            searchTerm: '',
+            rating: 'all',
+            price: 'all'
+        };
+        let selectedFacilityItem = null;
+
+        // --- 初期化 ---
+        function initialize() {
+            handleLayout();
+            window.addEventListener('resize', handleLayout);
+        }
+
+        function handleLayout() {
+            if (window.innerWidth <= 768) {
+                document.getElementById('desktop-container').style.display = 'none';
+                document.getElementById('mobile-container').style.display = 'flex';
+                if (!mobileMap) {
+                    setupMobileView();
+                }
+                // モバイル表示時に地図サイズを再計算
+                setTimeout(() => {
+                    if (mobileMap) mobileMap.invalidateSize();
+                }, 100);
+            } else {
+                document.getElementById('mobile-container').style.display = 'none';
+                document.getElementById('desktop-container').style.display = 'flex';
+                if (!map) {
+                    setupDesktopView();
+                }
+                 // デスクトップ表示時に地図サイズを再計算
+                setTimeout(() => {
+                    if (map) map.invalidateSize();
+                }, 100);
+            }
+        }
+
+        // --- デスクトップ版セットアップ ---
+        function setupDesktopView() {
+            map = L.map('map').setView([35.6895, 139.6917], 9);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            markers = L.layerGroup().addTo(map);
+            
+            setupEventListeners(document.getElementById('desktop-container'));
+            updateMapAndList();
+        }
+
+        // --- モバイル版セットアップ ---
+        function setupMobileView() {
+            mobileMap = L.map('mobile-map').setView([35.6895, 139.6917], 9);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mobileMap);
+            mobileMarkers = L.layerGroup().addTo(mobileMap);
+
+            const desktopFilters = document.querySelector('.filters-container');
+            const mobileSearchPanel = document.getElementById('mobile-search-panel');
+            mobileSearchPanel.innerHTML = desktopFilters.innerHTML;
+
+            setupEventListeners(document.getElementById('mobile-container'));
+            
+            document.getElementById('search-toggle').addEventListener('click', () => {
+                const panel = document.getElementById('mobile-search-panel');
+                panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+                // パネル表示切替後、地図サイズを再計算
+                setTimeout(() => {
+                    if (mobileMap) mobileMap.invalidateSize();
+                }, 200);
+            });
+            updateMapAndList();
+        }
+
+        // --- イベントリスナー設定 ---
+        function setupEventListeners(container) {
+            container.querySelector('#search-input').addEventListener('input', (e) => {
+                currentFilters.searchTerm = e.target.value;
+                updateMapAndList();
+            });
+
+            container.querySelectorAll('#rating-filters button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    currentFilters.rating = e.target.dataset.value;
+                    updateActiveButton(e.target.parentElement, e.target);
+                    updateMapAndList();
+                });
+            });
+
+            container.querySelectorAll('#price-filters button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    currentFilters.price = e.target.dataset.value;
+                    updateActiveButton(e.target.parentElement, e.target);
+                    updateMapAndList();
+                });
+            });
+        }
+
+        // --- 地図とリストの更新 ---
+        function updateMapAndList() {
+            const currentMap = map || mobileMap;
+            const currentMarkerLayer = markers || mobileMarkers;
+            if (!currentMap) return;
+
+            currentMarkerLayer.clearLayers();
+            
+            const facilityList = document.getElementById('facility-list');
+            if (facilityList) facilityList.innerHTML = '';
+            
+            const filteredData = onsenData.filter(filterPredicate);
+
+            filteredData.forEach(onsen => {
+                addMarker(onsen, currentMarkerLayer, currentMap);
+                if (window.innerWidth > 768) {
+                    addToList(onsen, currentMap, currentMarkerLayer);
+                }
+            });
+            
+            updateStats(filteredData);
+        }
+
+        // --- フィルター条件 ---
+        function filterPredicate(onsen) {
+            if (onsen.緯度 === null || onsen.経度 === null) return false;
+
+            const searchTerm = currentFilters.searchTerm.toLowerCase();
+            const keywordMatch = searchTerm === '' ||
+                onsen.施設名.toLowerCase().includes(searchTerm) ||
+                onsen.住所.toLowerCase().includes(searchTerm) ||
+                onsen.特徴.toLowerCase().includes(searchTerm);
+
+            const price = onsen.平日料金;
+            let priceMatch = currentFilters.price === 'all' || (price !== null && (
+                (currentFilters.price === '1000' && price <= 1000) ||
+                (currentFilters.price === '2000' && price > 1000 && price <= 2000) ||
+                (currentFilters.price === '3001' && price > 2000)
+            ));
+            
+            const ratingMatch = currentFilters.rating === 'all' || (onsen.総合評価 !== null && onsen.総合評価 >= parseFloat(currentFilters.rating));
+
+            return keywordMatch && priceMatch && ratingMatch;
+        }
+
+        // --- マーカー追加 ---
+        function addMarker(onsen, markerLayer, targetMap) {
+            const iconColor = getIconColor(onsen.総合評価);
+            const customIcon = L.divIcon({
+                html: `<i class="fas fa-map-pin" style="font-size: 40px; color: ${iconColor}; text-shadow: 1px 1px 3px rgba(0,0,0,0.4);"></i>`,
+                className: '', // デフォルトスタイルをクリア
+                iconSize: [40, 40], // アイコンのサイズ
+                iconAnchor: [20, 40], // マーカー位置に対応するアイコンの先端
+                popupAnchor: [0, -40] // ポップアップが開く位置
+            });
+            const marker = L.marker([onsen.緯度, onsen.経度], { icon: customIcon }).addTo(markerLayer);
+            
+            const popupContent = `
+                <div class="p-1">
+                    <h3 class="font-bold text-lg mb-2">${onsen.施設名}</h3>
+                    <p><i class="fas fa-map-marker-alt fa-fw"></i> ${onsen.住所}</p>
+                    <p><i class="fas fa-star fa-fw"></i> 評価: ${onsen.総合評価 || 'N/A'}</p>
+                    <p><i class="fas fa-yen-sign fa-fw"></i> 平日: ${onsen.平日料金?.toLocaleString()}円 | 土日祝: ${onsen.土日祝料金?.toLocaleString()}円</p>
+                    <p><i class="fas fa-info-circle fa-fw"></i> ${onsen.特徴}</p>
+                    ${onsen.料金特記事項 ? `<p class="text-sm text-red-500 mt-2"><i class="fas fa-exclamation-circle fa-fw"></i> ${onsen.料金特記事項}</p>` : ''}
+                </div>`;
+            marker.bindPopup(popupContent);
+        }
+
+        // --- リスト項目追加 (デスクトップ用) ---
+        function addToList(onsen, targetMap, markerLayer) {
+            const facilityList = document.getElementById('facility-list');
+            const listItem = document.createElement('div');
+            listItem.className = 'facility-item';
+            listItem.innerHTML = `
+                <h5>${onsen.施設名}</h5>
+                <p class="facility-rating">${'★'.repeat(Math.round(onsen.総合評価))}${'☆'.repeat(5 - Math.round(onsen.総合評価))} ${onsen.総合評価}</p>
+                <p><i class="fas fa-yen-sign fa-fw"></i> 平日: ${onsen.平日料金?.toLocaleString() || 'N/A'}円</p>
+            `;
+            listItem.addEventListener('click', () => {
+                targetMap.setView([onsen.緯度, onsen.経度], 15);
+                markerLayer.eachLayer(marker => {
+                    if (marker.getLatLng().lat === onsen.緯度) {
+                        marker.openPopup();
+                    }
+                });
+                if(selectedFacilityItem) selectedFacilityItem.classList.remove('selected');
+                listItem.classList.add('selected');
+                selectedFacilityItem = listItem;
+            });
+            facilityList.appendChild(listItem);
+        }
+
+        // --- 統計情報更新 ---
+        function updateStats(data) {
+            const count = data.length;
+            const prices = data.map(d => d.平日料金).filter(p => p !== null);
+            const avgPrice = prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(0) : 0;
+            
+            const statsHtml = `<p><strong>${count}</strong>件の施設を表示中</p><p>平均価格 (平日): <strong>約${Number(avgPrice).toLocaleString()}円</strong></p>`;
+            
+            document.getElementById('stats-section').innerHTML = statsHtml;
+            const mobileStatsContainer = document.querySelector('#mobile-search-panel .stats-section');
+            if(mobileStatsContainer) mobileStatsContainer.innerHTML = statsHtml;
+        }
+
+        // --- ヘルパー関数 ---
+        function getIconColor(rating) {
+            if (rating >= 4.5) return '#d32f2f';
+            if (rating >= 4.2) return '#f57c00';
+            if (rating >= 4.0) return '#1976d2';
+            return '#757575';
+        }
+
+        function updateActiveButton(container, activeButton) {
+            container.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            activeButton.classList.add('active');
+        }
+
+        // --- アプリケーション開始 ---
+        initialize();
+    </script>
+</body>
+</html>
